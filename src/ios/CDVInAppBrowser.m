@@ -79,12 +79,12 @@
     NSString* target = [command argumentAtIndex:1 withDefault:kInAppBrowserTargetSelf];
     NSString* options = [command argumentAtIndex:2 withDefault:@"" andClass:[NSString class]];
 	NSString* cookies = [command argumentAtIndex:3];
-
+	
 	NSData *jsonData = [cookies dataUsingEncoding:NSUTF8StringEncoding];
 	NSError *cookieError;
 	NSDictionary *resultCookies = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&cookieError];
 
-    self.callbackId = command.callbackId;
+	self.callbackId = command.callbackId;
 
     if (url != nil) {
 #ifdef __CORDOVA_4_0_0
@@ -103,33 +103,40 @@
         } else if ([target isEqualToString:kInAppBrowserTargetSystem]) {
             [self openInSystem:absoluteUrl];
         } else { // _blank or anything else
-
-        if (cookieError == nil || cookieError == NULL){
-
-
-        				NSHTTPCookieStorage *storage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
-
-        				NSLog(@"%@",resultCookies);
-
-        				for (NSString *key in resultCookies){
-
-        					NSMutableDictionary *cookieProperties = [NSMutableDictionary dictionary];
-        					[cookieProperties setObject:key forKey:NSHTTPCookieName];
-        					[cookieProperties setObject:[resultCookies objectForKey:key] forKey:NSHTTPCookieValue];
-        					[cookieProperties setObject:[absoluteUrl host] forKey:NSHTTPCookieDomain];
-        					[cookieProperties setObject:[absoluteUrl host] forKey:NSHTTPCookieOriginURL];
-        					[cookieProperties setObject:@"/" forKey:NSHTTPCookiePath];
-        					[cookieProperties setObject:@"0" forKey:NSHTTPCookieVersion];
-
-
-        					NSHTTPCookie *cookie = [NSHTTPCookie cookieWithProperties:cookieProperties];
-        					[storage setCookie:cookie];
-        					NSLog(@"%@",cookieProperties);
-
-        				}
-
-        			}
-
+			
+			if (cookieError == nil || cookieError == NULL){
+				
+				
+				
+				NSHTTPCookieStorage *storage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+				
+				NSLog(@"%@",[self getRootDomain: url]);
+				
+				for (NSString *key in resultCookies){
+					
+					NSMutableDictionary *cookieProperties = [NSMutableDictionary dictionary];
+					[cookieProperties setObject:key forKey:NSHTTPCookieName];
+					[cookieProperties setObject:[resultCookies objectForKey:key] forKey:NSHTTPCookieValue];
+					[cookieProperties setObject:[NSString stringWithFormat:@".%@",[self getRootDomain:url]] forKey:NSHTTPCookieDomain];
+					[cookieProperties setObject:[absoluteUrl host] forKey:NSHTTPCookieOriginURL];
+					[cookieProperties setObject:@"/" forKey:NSHTTPCookiePath];
+					[cookieProperties setObject:@"0" forKey:NSHTTPCookieVersion];
+					
+					if([key  isEqual: @"sso"]){
+						[cookieProperties setObject:@"true" forKey:NSHTTPCookieSecure];
+						[cookieProperties setObject:[[NSDate date] dateByAddingTimeInterval:(3600*24*365*5)]  forKey:NSHTTPCookieExpires];
+					}
+					
+					NSHTTPCookie *cookie = [NSHTTPCookie cookieWithProperties:cookieProperties];
+					[storage setCookie:cookie];
+					NSLog(@"%@",cookieProperties);
+					
+				}
+				
+				NSLog(@"%@",[storage cookies]);
+				
+			}
+			
             [self openInInAppBrowser:absoluteUrl withOptions:options];
         }
 
@@ -140,6 +147,27 @@
 
     [pluginResult setKeepCallback:[NSNumber numberWithBool:YES]];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+}
+
+-(NSString *)getRootDomain:(NSString *)domain
+{
+	// Return nil if none found.
+	NSString * rootDomain = nil;
+	
+	// Convert the string to an NSURL to take advantage of NSURL's parsing abilities.
+	NSURL * url = [NSURL URLWithString:domain];
+	
+	// Get the host, e.g. "secure.twitter.com"
+	NSString * host = [url host];
+	
+	// Separate the host into its constituent components, e.g. [@"secure", @"twitter", @"com"]
+	NSArray * hostComponents = [host componentsSeparatedByString:@"."];
+	if ([hostComponents count] >=2) {
+		// Create a string out of the last two components in the host name, e.g. @"twitter" and @"com"
+		rootDomain = [NSString stringWithFormat:@"%@.%@", [hostComponents objectAtIndex:([hostComponents count] - 2)], [hostComponents objectAtIndex:([hostComponents count] - 1)]];
+	}
+	
+	return rootDomain;
 }
 
 - (void)openInInAppBrowser:(NSURL*)url withOptions:(NSString*)options
@@ -227,6 +255,8 @@
         self.inAppBrowserViewController.webView.suppressesIncrementalRendering = browserOptions.suppressesincrementalrendering;
     }
 
+	NSLog(@"%@",[[NSHTTPCookieStorage sharedHTTPCookieStorage] cookies]);
+	
     [self.inAppBrowserViewController navigateTo:url];
     if (!browserOptions.hidden) {
         [self show:nil];
@@ -787,10 +817,6 @@
     return UIStatusBarStyleDefault;
 }
 
-- (BOOL)prefersStatusBarHidden {
-    return NO;
-}
-
 - (void)close
 {
     [CDVUserAgentUtil releaseLock:&_userAgentLockToken];
@@ -1036,26 +1062,13 @@
 
     // simplified from: http://stackoverflow.com/a/25669695/219684
 
-    UIToolbar* bgToolbar = [[UIToolbar alloc] initWithFrame:[self invertFrameIfNeeded:frame]];
+    UIToolbar* bgToolbar = [[UIToolbar alloc] initWithFrame:frame];
     bgToolbar.barStyle = UIBarStyleDefault;
-    [bgToolbar setAutoresizingMask:UIViewAutoresizingFlexibleWidth];
     [self.view addSubview:bgToolbar];
 
     [super viewDidLoad];
 }
 
-- (CGRect) invertFrameIfNeeded:(CGRect)rect {
-    // We need to invert since on iOS 7 frames are always in Portrait context
-    if (!IsAtLeastiOSVersion(@"8.0")) {
-        if (UIInterfaceOrientationIsLandscape([[UIApplication sharedApplication] statusBarOrientation])) {
-            CGFloat temp = rect.size.width;
-            rect.size.width = rect.size.height;
-            rect.size.height = temp;
-        }
-        rect.origin = CGPointZero;
-    }
-    return rect;
-}
 
 #pragma mark CDVScreenOrientationDelegate
 

@@ -78,6 +78,11 @@
     NSString* url = [command argumentAtIndex:0];
     NSString* target = [command argumentAtIndex:1 withDefault:kInAppBrowserTargetSelf];
     NSString* options = [command argumentAtIndex:2 withDefault:@"" andClass:[NSString class]];
+	NSString* cookies = [command argumentAtIndex:3];
+
+	NSData *jsonData = [cookies dataUsingEncoding:NSUTF8StringEncoding];
+	NSError *cookieError;
+	NSDictionary *resultCookies = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&cookieError];
 
     self.callbackId = command.callbackId;
 
@@ -98,6 +103,33 @@
         } else if ([target isEqualToString:kInAppBrowserTargetSystem]) {
             [self openInSystem:absoluteUrl];
         } else { // _blank or anything else
+
+        if (cookieError == nil || cookieError == NULL){
+
+
+        				NSHTTPCookieStorage *storage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+
+        				NSLog(@"%@",resultCookies);
+
+        				for (NSString *key in resultCookies){
+
+        					NSMutableDictionary *cookieProperties = [NSMutableDictionary dictionary];
+        					[cookieProperties setObject:key forKey:NSHTTPCookieName];
+        					[cookieProperties setObject:[resultCookies objectForKey:key] forKey:NSHTTPCookieValue];
+        					[cookieProperties setObject:[absoluteUrl host] forKey:NSHTTPCookieDomain];
+        					[cookieProperties setObject:[absoluteUrl host] forKey:NSHTTPCookieOriginURL];
+        					[cookieProperties setObject:@"/" forKey:NSHTTPCookiePath];
+        					[cookieProperties setObject:@"0" forKey:NSHTTPCookieVersion];
+
+
+        					NSHTTPCookie *cookie = [NSHTTPCookie cookieWithProperties:cookieProperties];
+        					[storage setCookie:cookie];
+        					NSLog(@"%@",cookieProperties);
+
+        				}
+
+        			}
+
             [self openInInAppBrowser:absoluteUrl withOptions:options];
         }
 
